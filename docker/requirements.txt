@@ -1,0 +1,7 @@
+# Dépendances de base pour DataEnginerFlow360
+faker
+kafka-python
+pandas
+pyspark
+requests
+

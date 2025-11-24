@@ -1,0 +1,13 @@
+
+dataflow360:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      user: postgres
+      password: '1234'
+      port: 5432
+      dbname: dataenginerflow360
+      schema: public
+      threads: 4

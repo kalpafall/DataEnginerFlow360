@@ -1,0 +1,63 @@
+# Fichiers et dossiers à ignorer
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data
+data_lake/raw/*
+data_lake/processed/*
+data_lake/curated/*
+!data_lake/raw/.gitkeep
+!data_lake/processed/.gitkeep
+!data_lake/curated/.gitkeep
+
+# Docker
+docker/grafana/data/
+docker/prometheus/data/
+
+# Logs
+*.log
+logs/
+transformation/dbt/logs/
+transformation/dbt/target/
+transformation/dbt/dbt_packages/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.pem
+*.key
+secrets/
+
+# Airflow
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+
+# Temporary files
+*.tmp
+*.bak
+*.cache

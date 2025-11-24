@@ -1,0 +1,337 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Data Warehouse (couche CURATED)
+  postgres:
+    image: postgres:15-alpine
+    container_name: dataflow_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dataenginerflow360
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - dataflow_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Zookeeper pour Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: dataflow_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - dataflow_network
+
+  # Kafka - Streaming
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: dataflow_kafka
+    depends_on:
+      - zookeeper
+    ports:
+      # - "9092:9092" # Port conflict with host
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - dataflow_network
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis pour Airflow
+  redis:
+    image: redis:7-alpine
+    container_name: dataflow_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - dataflow_network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Airflow Webserver
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: dataflow_airflow_webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxJf8lTz8Qv6zWxG9iQJc-qc='
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'secret_key_for_webserver'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    volumes:
+      - ../orchestration/dags:/opt/airflow/dags
+      - ../data_lake:/opt/airflow/data_lake
+      - ../ingestion:/opt/airflow/ingestion
+      - ../transformation:/opt/airflow/transformation
+      - ../storage:/opt/airflow/storage
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: webserver
+    networks:
+      - dataflow_network
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: dataflow_airflow_scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxJf8lTz8Qv6zWxG9iQJc-qc='
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ../orchestration/dags:/opt/airflow/dags
+      - ../data_lake:/opt/airflow/data_lake
+      - ../ingestion:/opt/airflow/ingestion
+      - ../transformation:/opt/airflow/transformation
+      - ../storage:/opt/airflow/storage
+      - airflow_logs:/opt/airflow/logs
+    command: scheduler
+    networks:
+      - dataflow_network
+
+  # Airflow Worker (Celery)
+  airflow-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: dataflow_airflow_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      airflow-scheduler:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxJf8lTz8Qv6zWxG9iQJc-qc='
+    volumes:
+      - ../orchestration/dags:/opt/airflow/dags
+      - ../data_lake:/opt/airflow/data_lake
+      - ../ingestion:/opt/airflow/ingestion
+      - ../transformation:/opt/airflow/transformation
+      - ../storage:/opt/airflow/storage
+      - airflow_logs:/opt/airflow/logs
+    command: celery worker
+    networks:
+      - dataflow_network
+
+  # Flower - Monitoring Celery
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: dataflow_flower
+    depends_on:
+      - redis
+      - airflow-worker
+    environment:
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    command: celery flower
+    networks:
+      - dataflow_network
+
+  # Grafana - Monitoring et visualisation
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dataflow_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - dataflow_network
+    depends_on:
+      - postgres
+
+  # Prometheus - Métriques
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dataflow_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - dataflow_network
+
+  # Spark Master
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    container_name: dataflow_spark_master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    networks:
+      - dataflow_network
+    volumes:
+      - ../transformation:/opt/bitnami/spark/transformation
+      - ../data_lake:/opt/bitnami/spark/data_lake
+
+  # Spark Worker
+  spark-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    container_name: dataflow_spark_worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    depends_on:
+      - spark-master
+    networks:
+      - dataflow_network
+    volumes:
+      - ../transformation:/opt/bitnami/spark/transformation
+      - ../data_lake:/opt/bitnami/spark/data_lake
+
+  # PostgreSQL Exporter for Prometheus
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: dataflow_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:1234@postgres:5432/dataenginerflow360?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - dataflow_network
+    depends_on:
+      - postgres
+
+  # StatsD Exporter for Airflow metrics
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    container_name: dataflow_statsd_exporter
+    ports:
+      - "9102:9102"
+      - "9125:9125/udp"
+    networks:
+      - dataflow_network
+    command:
+      - '--statsd.mapping-config=/tmp/statsd_mapping.yml'
+    volumes:
+      - ./statsd_mapping.yml:/tmp/statsd_mapping.yml
+
+  # Kafka Exporter for Prometheus
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: dataflow_kafka_exporter
+    command:
+      - '--kafka.server=kafka:9092'
+    ports:
+      - "9308:9308"
+    networks:
+      - dataflow_network
+    depends_on:
+      - kafka
+
+  # cAdvisor for Docker container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: dataflow_cadvisor
+    ports:
+      - "8082:8080"
+    networks:
+      - dataflow_network
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+
+volumes:
+  postgres_data:
+  airflow_logs:
+  grafana_data:
+  prometheus_data:
+
+
+networks:
+  dataflow_network:
+    driver: bridge

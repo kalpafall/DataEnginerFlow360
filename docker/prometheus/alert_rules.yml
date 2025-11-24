@@ -1,0 +1,147 @@
+groups:
+  - name: airflow_alerts
+    interval: 30s
+    rules:
+      # Alerte si un DAG échoue
+      - alert: DAGFailure
+        expr: increase(airflow_dag_run_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: airflow
+        annotations:
+          summary: "DAG {{ $labels.dag_id }} a échoué"
+          description: "Le DAG {{ $labels.dag_id }} a échoué {{ $value }} fois dans les 5 dernières minutes"
+
+      # Alerte si la durée d'un DAG est anormalement longue
+      - alert: DAGHighDuration
+        expr: airflow_dag_run_duration_seconds > 3600
+        for: 5m
+        labels:
+          severity: warning
+          component: airflow
+        annotations:
+          summary: "DAG {{ $labels.dag_id }} prend trop de temps"
+          description: "Le DAG {{ $labels.dag_id }} s'exécute depuis {{ $value }} secondes"
+
+  - name: postgres_alerts
+    interval: 30s
+    rules:
+      # Alerte si PostgreSQL est down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: postgres
+        annotations:
+          summary: "PostgreSQL est down"
+          description: "PostgreSQL n'est pas accessible depuis {{ $value }} minutes"
+
+      # Alerte si trop de connexions
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: postgres
+        annotations:
+          summary: "Trop de connexions PostgreSQL"
+          description: "PostgreSQL a {{ $value }} connexions actives"
+
+      # Alerte si taux de commit bas
+      - alert: PostgreSQLLowCommitRate
+        expr: rate(pg_stat_database_xact_commit[5m]) < 10
+        for: 5m
+        labels:
+          severity: warning
+          component: postgres
+        annotations:
+          summary: "Taux de commit PostgreSQL bas"
+          description: "Taux de commit: {{ $value }} commits/s"
+
+  - name: kafka_alerts
+    interval: 30s
+    rules:
+      # Alerte si Kafka est down
+      - alert: KafkaDown
+        expr: up{job="kafka"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Kafka est down"
+          description: "Kafka n'est pas accessible"
+
+      # Alerte si consumer lag trop élevé
+      - alert: KafkaConsumerLag
+        expr: kafka_consumergroup_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Kafka consumer lag élevé"
+          description: "Consumer group {{ $labels.consumergroup }} a un lag de {{ $value }} messages"
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # Alerte si utilisation CPU élevée
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Utilisation CPU élevée sur {{ $labels.instance }}"
+          description: "CPU: {{ $value }}%"
+
+      # Alerte si mémoire faible
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Utilisation mémoire élevée sur {{ $labels.instance }}"
+          description: "Mémoire: {{ $value }}%"
+
+      # Alerte si disque presque plein
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Espace disque faible sur {{ $labels.instance }}"
+          description: "Disque {{ $labels.mountpoint }}: {{ $value }}% utilisé"
+
+  - name: data_quality_alerts
+    interval: 60s
+    rules:
+      # Alerte si tests dbt échouent
+      - alert: DBTTestFailure
+        expr: dbt_test_failures_total > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: data_quality
+        annotations:
+          summary: "Tests dbt ont échoué"
+          description: "{{ $value }} tests dbt ont échoué"
+
+      # Alerte si taux d'erreur de validation élevé
+      - alert: HighDataValidationErrors
+        expr: rate(data_validation_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: data_quality
+        annotations:
+          summary: "Taux d'erreur de validation élevé"
+          description: "{{ $value }} erreurs/s détectées"

@@ -1,0 +1,35 @@
+
+version: 2
+
+sources:
+  - name: raw_data
+    description: "Raw data from data lake (loaded via external tables or staging)"
+    tables:
+      - name: users
+      - name: transactions
+
+models:
+  - name: dim_users
+    description: "User dimension table"
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+      - name: email
+        tests:
+          - not_null
+
+  - name: fact_transactions
+    description: "Transaction fact table"
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_users')
+              field: user_id

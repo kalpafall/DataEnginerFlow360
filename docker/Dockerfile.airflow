@@ -1,0 +1,33 @@
+FROM apache/airflow:2.8.0-python3.10
+
+USER root
+
+# Installer les dépendances système pour PySpark et HDFS
+RUN apt-get update && apt-get install -y \
+    default-jdk \
+    procps \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configurer JAVA_HOME
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV PATH=$PATH:$JAVA_HOME/bin
+
+USER airflow
+
+# Copier et installer les dépendances Python
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Installer les providers Airflow supplémentaires
+RUN pip install --no-cache-dir \
+    apache-airflow-providers-apache-spark==4.5.0 \
+    apache-airflow-providers-postgres==5.10.0 \
+    apache-airflow-providers-redis==3.5.0 \
+    apache-airflow-providers-celery==3.5.0
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/data_lake
+
+WORKDIR /opt/airflow

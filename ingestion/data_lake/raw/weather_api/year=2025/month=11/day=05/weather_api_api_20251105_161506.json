@@ -1,0 +1,16 @@
+{
+  "dataset_name": "weather_api",
+  "source_type": "api",
+  "ingestion_timestamp": "2025-11-05T16:15:06.458415",
+  "row_count": 168,
+  "columns": [
+    "time",
+    "temperature_2m",
+    "precipitation",
+    "_ingestion_timestamp",
+    "_source",
+    "_source_url"
+  ],
+  "file_path": "data_lake/raw/weather_api/year=2025/month=11/day=05/weather_api_api_20251105_161506.parquet",
+  "partition": "year=2025/month=11/day=05"
+}

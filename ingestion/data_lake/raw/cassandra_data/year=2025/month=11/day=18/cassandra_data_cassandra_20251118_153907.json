@@ -1,0 +1,12 @@
+{
+  "dataset_name": "cassandra_data",
+  "source_type": "cassandra",
+  "ingestion_timestamp": "2025-11-18T15:39:07.987396",
+  "row_count": 0,
+  "columns": [
+    "_ingestion_timestamp",
+    "_source"
+  ],
+  "file_path": "data_lake/raw/cassandra_data/year=2025/month=11/day=18/cassandra_data_cassandra_20251118_153907.parquet",
+  "partition": "year=2025/month=11/day=18"
+}

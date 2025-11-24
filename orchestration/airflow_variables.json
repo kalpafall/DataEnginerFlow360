@@ -1,0 +1,12 @@
+{
+  "data_lake_path": "/opt/airflow/data_lake",
+  "postgres_host": "postgres",
+  "postgres_port": 5432,
+  "postgres_database": "dataenginerflow360",
+  "postgres_user": "postgres",
+  "postgres_password": "1234",
+  "kafka_bootstrap_servers": "kafka:9092",
+  "spark_master": "local[*]",
+  "dbt_project_dir": "/opt/airflow/transformation/dbt",
+  "dbt_profiles_dir": "/opt/airflow/transformation/dbt"
+}

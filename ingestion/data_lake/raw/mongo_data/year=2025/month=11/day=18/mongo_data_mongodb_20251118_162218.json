@@ -1,0 +1,12 @@
+{
+  "dataset_name": "mongo_data",
+  "source_type": "mongodb",
+  "ingestion_timestamp": "2025-11-18T16:22:19.027604",
+  "row_count": 0,
+  "columns": [
+    "_ingestion_timestamp",
+    "_source"
+  ],
+  "file_path": "data_lake/raw/mongo_data/year=2025/month=11/day=18/mongo_data_mongodb_20251118_162218.parquet",
+  "partition": "year=2025/month=11/day=18"
+}

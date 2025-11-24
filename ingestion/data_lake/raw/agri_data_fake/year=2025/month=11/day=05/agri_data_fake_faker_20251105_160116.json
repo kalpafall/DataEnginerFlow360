@@ -1,0 +1,22 @@
+{
+  "dataset_name": "agri_data_fake",
+  "source_type": "faker",
+  "ingestion_timestamp": "2025-11-05T16:01:16.596320",
+  "row_count": 200,
+  "columns": [
+    "farm_id",
+    "region",
+    "crop",
+    "soil_type",
+    "temperature",
+    "humidity",
+    "rainfall_mm",
+    "yield_tons",
+    "collection_date",
+    "_ingestion_timestamp",
+    "_source",
+    "_data_type"
+  ],
+  "file_path": "data_lake/raw/agri_data_fake/year=2025/month=11/day=05/agri_data_fake_faker_20251105_160116.parquet",
+  "partition": "year=2025/month=11/day=05"
+}
