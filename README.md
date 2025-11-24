@@ -1,5 +1,13 @@
 # DataEnginerFlow360 🚀
 
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
+[![PySpark](https://img.shields.io/badge/pyspark-3.5.0-orange.svg)](https://spark.apache.org/)
+[![dbt](https://img.shields.io/badge/dbt-1.10.15-FF694B.svg)](https://www.getdbt.com/)
+[![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://www.docker.com/)
+[![Airflow](https://img.shields.io/badge/airflow-orchestration-017CEE.svg)](https://airflow.apache.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-production%20ready-success.svg)]()
+
 Pipeline de données end-to-end avec ingestion, transformation, orchestration et monitoring.
 
 ## 📊 Architecture
