@@ -1,7 +1,7 @@
 -- Script d'initialisation PostgreSQL pour DataEnginerFlow360
 
--- Créer la base de données Airflow si nécessaire
-CREATE DATABASE IF NOT EXISTS airflow;
+-- Créer la base de données Airflow
+SELECT 'CREATE DATABASE airflow' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
 
 -- Créer les schémas pour le Data Warehouse
 CREATE SCHEMA IF NOT EXISTS curated;
@@ -13,7 +13,13 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
 -- Créer un utilisateur pour les applications
-CREATE USER IF NOT EXISTS dataflow_app WITH PASSWORD 'dataflow123';
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'dataflow_app') THEN
+    CREATE USER dataflow_app WITH PASSWORD 'dataflow123';
+  END IF;
+END
+$$;
 GRANT ALL PRIVILEGES ON SCHEMA curated TO dataflow_app;
 GRANT ALL PRIVILEGES ON SCHEMA staging TO dataflow_app;
 GRANT ALL PRIVILEGES ON SCHEMA analytics TO dataflow_app;

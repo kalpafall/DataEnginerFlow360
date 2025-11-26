@@ -8,7 +8,12 @@ RUN apt-get update && apt-get install -y \
     procps \
     curl \
     vim \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
+
+# Copier le script d'entrypoint personnalisé
+COPY airflow-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Configurer JAVA_HOME
 ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
@@ -31,3 +36,5 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/data_lake
 
 WORKDIR /opt/airflow
+
+ENTRYPOINT ["/entrypoint.sh"]
