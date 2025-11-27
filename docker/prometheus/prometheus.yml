@@ -2,57 +2,61 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'dataflow360'
-    environment: 'production'
+    cluster: "dataflow360"
+    environment: "production"
 
 # Charger les règles d'alerte
 rule_files:
-  - 'alert_rules.yml'
+  - "alert_rules.yml"
 
 scrape_configs:
   # Prometheus self-monitoring
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
 
   # PostgreSQL metrics via postgres_exporter
-  - job_name: 'postgres'
+  - job_name: "postgres"
     static_configs:
-      - targets: ['postgres-exporter:9187']
+      - targets: ["postgres-exporter:9187"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        replacement: 'postgres'
+        replacement: "postgres"
 
   # Airflow metrics via StatsD exporter
-  - job_name: 'airflow'
+  - job_name: "airflow"
     static_configs:
-      - targets: ['statsd-exporter:9102']
+      - targets: ["statsd-exporter:9102"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        replacement: 'airflow'
+        replacement: "airflow"
 
   # Kafka metrics via JMX exporter
-  - job_name: 'kafka'
+  - job_name: "kafka"
     static_configs:
-      - targets: ['kafka-exporter:9308']
+      - targets: ["kafka-exporter:9308"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        replacement: 'kafka'
+        replacement: "kafka"
 
   # Docker container metrics via cAdvisor
-  - job_name: 'cadvisor'
+  - job_name: "cadvisor"
     static_configs:
-      - targets: ['cadvisor:8080']
+      - targets: ["cadvisor:8080"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        replacement: 'docker'
+        replacement: "docker"
 
   # Grafana metrics
-  - job_name: 'grafana'
+  - job_name: "grafana"
     static_configs:
-      - targets: ['grafana:3000']
+      - targets: ["grafana:3000"]
 
+  # Custom Metrics Collector
+  - job_name: "custom_metrics"
+    static_configs:
+      - targets: ["metrics-collector:8000"]

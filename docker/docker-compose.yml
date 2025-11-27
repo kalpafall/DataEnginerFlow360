@@ -223,6 +223,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -313,6 +314,24 @@ services:
       - dataflow_network
     depends_on:
       - kafka
+
+  # Custom Metrics Collector
+  metrics-collector:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.collector
+    container_name: dataflow_metrics_collector
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - KAFKA_BOOTSTRAP=kafka:9092
+    networks:
+      - dataflow_network
+    depends_on:
+      - kafka
+      - postgres
 
   # cAdvisor for Docker container metrics
   cadvisor:

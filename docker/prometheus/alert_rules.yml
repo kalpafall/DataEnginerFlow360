@@ -145,3 +145,39 @@ groups:
         annotations:
           summary: "Taux d'erreur de validation élevé"
           description: "{{ $value }} erreurs/s détectées"
+
+  - name: agricultural_alerts
+    interval: 30s
+    rules:
+      # Alerte critique: Humidité du sol trop basse (Sécheresse)
+      - alert: SoilMoistureCritical
+        expr: avg_over_time(sensor_value{type="soil_moisture"}[1h]) < 20
+        for: 15m
+        labels:
+          severity: critical
+          component: agriculture
+        annotations:
+          summary: "Humidité du sol CRITIQUE sur {{ $labels.location }}"
+          description: "L'humidité du sol est à {{ $value }}% (seuil: 20%). Risque de stress hydrique."
+
+      # Alerte warning: Température élevée
+      - alert: HighTemperatureWarning
+        expr: avg_over_time(sensor_value{type="air_temperature"}[1h]) > 35
+        for: 30m
+        labels:
+          severity: warning
+          component: agriculture
+        annotations:
+          summary: "Température élevée sur {{ $labels.location }}"
+          description: "La température moyenne est de {{ $value }}°C."
+
+      # Alerte: Pas de données capteurs reçues
+      - alert: NoSensorData
+        expr: rate(kafka_topic_partition_current_offset{topic="sensor_data"}[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: iot_infrastructure
+        annotations:
+          summary: "Aucune donnée capteur reçue"
+          description: "Aucun message reçu sur le topic sensor_data depuis 10 minutes."

@@ -1,106 +1,131 @@
 """
-DAG Airflow pour l'ingestion batch de données
-Orchestre l'ingestion depuis différentes sources vers la couche RAW
+DAG Airflow pour l'ingestion batch de données agricoles
+Orchestre la génération et l'ingestion de données depuis le générateur agricole
 """
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.utils.task_group import TaskGroup
-import sys
+import subprocess
+import json
 from pathlib import Path
 
-# Ajouter le chemin du projet au PYTHONPATH
-project_root = Path('/opt/airflow')
-sys.path.insert(0, str(project_root))
 
-from ingestion.data_ingestion import DataIngestion
-
-# Configuration
-CONFIG = {
-    'data_lake_path': '/opt/airflow/data_lake',
-    'postgres': {
-        'host': 'postgres',
-        'port': 5432,
-        'database': 'dataenginerflow360',
-        'user': 'postgres',
-        'password': '1234'
-    }
-}
-
-
-def ingest_fake_users(**context):
-    """Ingère des utilisateurs fake"""
-    ingestion = DataIngestion(CONFIG)
-    output_path = ingestion.generate_fake_data(
-        dataset_name='users_fake',
-        num_records=1000,
-        data_type='users'
-    )
-    context['ti'].xcom_push(key='users_path', value=output_path)
-    return output_path
-
-
-def ingest_fake_transactions(**context):
-    """Ingère des transactions fake"""
-    ingestion = DataIngestion(CONFIG)
-    output_path = ingestion.generate_fake_data(
-        dataset_name='transactions_fake',
-        num_records=5000,
-        data_type='transactions'
-    )
-    context['ti'].xcom_push(key='transactions_path', value=output_path)
-    return output_path
-
-
-def ingest_fake_logs(**context):
-    """Ingère des logs fake"""
-    ingestion = DataIngestion(CONFIG)
-    output_path = ingestion.generate_fake_data(
-        dataset_name='logs_fake',
-        num_records=10000,
-        data_type='logs'
-    )
-    context['ti'].xcom_push(key='logs_path', value=output_path)
-    return output_path
-
-
-def ingest_from_api(**context):
-    """Ingère depuis une API publique"""
-    ingestion = DataIngestion(CONFIG)
+def generate_agricultural_data(**context):
+    """Génère des données agricoles"""
     try:
-        output_path = ingestion.ingest_from_api(
-            api_url='https://jsonplaceholder.typicode.com/posts',
-            dataset_name='api_posts'
+        result = subprocess.run(
+            ['python3', '/opt/airflow/agricultural_data_generator.py'],
+            capture_output=True,
+            text=True,
+            cwd='/opt/airflow'
         )
-        context['ti'].xcom_push(key='api_posts_path', value=output_path)
-        return output_path
+        
+        if result.returncode == 0:
+            print("✅ Données agricoles générées avec succès")
+            print(result.stdout)
+            context['ti'].xcom_push(key='generation_status', value='success')
+            return 'success'
+        else:
+            print(f"❌ Erreur lors de la génération: {result.stderr}")
+            context['ti'].xcom_push(key='generation_status', value='failed')
+            return 'failed'
     except Exception as e:
-        print(f"Erreur ingestion API: {e}")
-        return None
+        print(f"❌ Exception: {str(e)}")
+        return 'failed'
 
 
-def validate_ingestion(**context):
-    """Valide que l'ingestion s'est bien passée"""
+def send_to_kafka(**context):
+    """Envoie les données vers Kafka"""
+    try:
+        result = subprocess.run(
+            ['python3', '/opt/airflow/demo_agricultural_pipeline.py'],
+            capture_output=True,
+            text=True,
+            cwd='/opt/airflow'
+        )
+        
+        if result.returncode == 0:
+            print("✅ Données envoyées vers Kafka")
+            print(result.stdout)
+            return 'success'
+        else:
+            print(f"⚠️ Avertissement Kafka: {result.stderr}")
+            return 'completed_with_warnings'
+    except Exception as e:
+        print(f"⚠️ Exception Kafka: {str(e)}")
+        return 'failed'
+
+
+def validate_data_lake(**context):
+    """Valide que les données sont dans le Data Lake"""
+    data_lake_path = Path('/opt/airflow/data_lake/raw/agriculture')
+    
+    if not data_lake_path.exists():
+        raise ValueError("Le répertoire agriculture n'existe pas dans le Data Lake")
+    
+    expected_files = ['farms.json', 'fields.json', 'crops.json', 'harvests.json', 
+                     'weather.json', 'sensors.json', 'sales.json']
+    
+    validation_report = {}
+    for file in expected_files:
+        file_path = data_lake_path / file
+        if file_path.exists():
+            file_size = file_path.stat().st_size
+            validation_report[file] = {
+                'exists': True,
+                'size_bytes': file_size,
+                'size_kb': round(file_size / 1024, 2)
+            }
+        else:
+            validation_report[file] = {'exists': False}
+    
+    print("📊 Rapport de validation:")
+    for file, info in validation_report.items():
+        if info['exists']:
+            print(f"  ✅ {file}: {info['size_kb']} KB")
+        else:
+            print(f"  ❌ {file}: MANQUANT")
+    
+    # Vérifier que tous les fichiers existent
+    all_exist = all(info['exists'] for info in validation_report.values())
+    
+    if not all_exist:
+        raise ValueError("Certains fichiers de données sont manquants")
+    
+    context['ti'].xcom_push(key='validation_report', value=validation_report)
+    return validation_report
+
+
+def generate_summary_report(**context):
+    """Génère un rapport récapitulatif"""
     ti = context['ti']
     
-    users_path = ti.xcom_pull(key='users_path', task_ids='fake_data.ingest_users')
-    transactions_path = ti.xcom_pull(key='transactions_path', task_ids='fake_data.ingest_transactions')
-    logs_path = ti.xcom_pull(key='logs_path', task_ids='fake_data.ingest_logs')
+    generation_status = ti.xcom_pull(key='generation_status', task_ids='generate_data')
+    validation_report = ti.xcom_pull(key='validation_report', task_ids='validate_data')
     
-    validation_report = {
-        'users': users_path is not None,
-        'transactions': transactions_path is not None,
-        'logs': logs_path is not None,
-        'timestamp': datetime.now().isoformat()
-    }
+    total_size = sum(info['size_kb'] for info in validation_report.values() if info['exists'])
     
-    print(f"Validation Report: {validation_report}")
+    report = f"""
+    ========================================
+    📊 RAPPORT D'INGESTION AGRICOLE
+    ========================================
+    Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     
-    if not all(validation_report.values()):
-        raise ValueError("Certaines ingestions ont échoué")
+    Statut de génération: {generation_status}
     
-    return validation_report
+    Fichiers générés:
+    {chr(10).join([f"  - {file}: {info['size_kb']} KB" for file, info in validation_report.items() if info['exists']])}
+    
+    Taille totale: {total_size:.2f} KB
+    
+    ✅ Pipeline d'ingestion terminé avec succès!
+    ========================================
+    """
+    
+    print(report)
+    return report
 
 
 # Arguments par défaut
@@ -109,9 +134,9 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 2,
+    'retries': 1,
     'retry_delay': timedelta(minutes=5),
-    'start_date': datetime(2024, 1, 1),
+    'start_date': datetime(2025, 11, 25),
 }
 
 
@@ -119,48 +144,39 @@ default_args = {
 with DAG(
     dag_id='batch_ingestion',
     default_args=default_args,
-    description='Ingestion batch de données depuis différentes sources',
+    description='Ingestion batch de données agricoles',
     schedule_interval='0 2 * * *',  # Tous les jours à 2h du matin
     catchup=False,
-    tags=['ingestion', 'batch', 'raw'],
+    tags=['ingestion', 'batch', 'agriculture'],
 ) as dag:
     
-    # Groupe de tâches pour les données fake
-    with TaskGroup('fake_data', tooltip='Génération de données fake') as fake_data_group:
-        
-        task_ingest_users = PythonOperator(
-            task_id='ingest_users',
-            python_callable=ingest_fake_users,
-            provide_context=True,
-        )
-        
-        task_ingest_transactions = PythonOperator(
-            task_id='ingest_transactions',
-            python_callable=ingest_fake_transactions,
-            provide_context=True,
-        )
-        
-        task_ingest_logs = PythonOperator(
-            task_id='ingest_logs',
-            python_callable=ingest_fake_logs,
-            provide_context=True,
-        )
+    # Génération des données
+    task_generate = PythonOperator(
+        task_id='generate_data',
+        python_callable=generate_agricultural_data,
+        provide_context=True,
+    )
     
-    # Groupe de tâches pour les sources externes
-    with TaskGroup('external_sources', tooltip='Ingestion depuis sources externes') as external_group:
-        
-        task_ingest_api = PythonOperator(
-            task_id='ingest_api',
-            python_callable=ingest_from_api,
-            provide_context=True,
-        )
+    # Envoi vers Kafka
+    task_kafka = PythonOperator(
+        task_id='send_to_kafka',
+        python_callable=send_to_kafka,
+        provide_context=True,
+    )
     
-    # Validation finale
+    # Validation du Data Lake
     task_validate = PythonOperator(
-        task_id='validate_ingestion',
-        python_callable=validate_ingestion,
+        task_id='validate_data',
+        python_callable=validate_data_lake,
+        provide_context=True,
+    )
+    
+    # Génération du rapport
+    task_report = PythonOperator(
+        task_id='generate_report',
+        python_callable=generate_summary_report,
         provide_context=True,
     )
     
     # Définition des dépendances
-    [fake_data_group, external_group] >> task_validate
+    task_generate >> task_kafka >> task_validate >> task_report
